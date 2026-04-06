@@ -20,28 +20,22 @@ required_columns = ['name', 'company', 'city', 'experience', 'key_skills', 'sala
 for col in required_columns:
     if col not in df.columns: df[col] = None
 
-# --- ФИЛЬТР РЕЛЕВАНТНОСТИ (ОЧИСТКА ОТ МУСОРА) ---
+# --- ФИЛЬТР РЕЛЕВАНТНОСТИ (ОЧИСТКА ОТ МЕНЕДЖЕРОВ И ПРОДАЖ) ---
 GOOD_WORDS = ['бизнес', 'business', 'системн', 'system', 'it', 'ит', 'требован', 'процесс', 'ba', 'sa']
-BAD_WORDS = ['спортивн', 'футбол', 'ставок', 'теннис', 'хоккей', 'продаж', 'маркетинг', 'склад', 'курьер']
+BAD_WORDS = ['привлечению', 'развитию бизнеса', 'консалтинг', 'продаж', 'маркетинг', 'склад', 'курьер', 'риелтор', 'ставок']
 
 def is_relevant(name):
     name = str(name).lower()
-    # Если есть "плохое" слово — удаляем сразу
-    if any(bad in name for bad in BAD_WORDS):
-        return False
-    # Если нет ни одного "хорошего" слова — удаляем
-    if not any(good in name for good in GOOD_WORDS):
-        return False
+    if any(bad in name for bad in BAD_WORDS): return False
+    if not any(good in name for good in GOOD_WORDS): return False
     return True
 
-# Применяем очистку
 if not df.empty:
     df = df[df['name'].apply(is_relevant)].copy()
 
 # Расчет средней зарплаты
 df['salary_avg'] = df[['salary_from', 'salary_to']].mean(axis=1)
 
-# Определяем уровень (грейд)
 def get_level(exp):
     exp = str(exp).lower()
     if 'нет опыта' in exp: return 'Junior'
@@ -49,47 +43,33 @@ def get_level(exp):
     return 'Senior'
 
 df['level'] = df['experience'].apply(get_level)
-
-# Очистка списка навыков
 df['key_skills_list'] = df['key_skills'].apply(lambda s: [str(i) for i in s if i] if isinstance(s, list) else [])
 
-# Определяем МАКСИМАЛЬНУЮ ЗАРПЛАТУ из данных (чтобы слайдер видел 1.1 млн)
-if not df['salary_avg'].dropna().empty:
+# Максимальная зарплата для слайдера
+if not df.empty and not df['salary_avg'].dropna().empty:
     MAX_SALARY_DATA = int(df['salary_avg'].max())
 else:
-    MAX_SALARY_DATA = 500000
+    MAX_SALARY_DATA = 1100000
 
-# --- 2. КОНСТАНТЫ СТИЛЯ ---
-COLORS = {
-    "primary": "#002B5B", 
-    "secondary": "#3B82F6", 
-    "accent": "#8B5CF6", 
-    "bg": "#F1F5F9"
-}
-
+# --- 2. КОНСТАНТЫ СТИЛЯ (ВАШ ДИЗАЙН) ---
+COLORS = {"primary": "#002B5B", "secondary": "#3B82F6", "accent": "#8B5CF6", "bg": "#F1F5F9"}
 CARD_STYLE = {
-    "borderRadius": "15px", 
-    "boxShadow": "0 4px 20px rgba(0,0,0,0.05)", 
-    "border": "none", 
-    "backgroundColor": "white", 
-    "padding": "25px",
-    "height": "100%",
+    "borderRadius": "15px", "boxShadow": "0 4px 20px rgba(0,0,0,0.05)", 
+    "border": "none", "backgroundColor": "white", "padding": "25px", "height": "100%",
 }
-
 PLOT_MARGINS = dict(l=40, r=20, t=60, b=40)
 
 app = Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 
-# --- 3. СТРУКТУРА ИНТЕРФЕЙСА ---
+# --- 3. ИНТЕРФЕЙС ---
 app.layout = html.Div([
     dbc.Container([
-        # Хедер
         dbc.Row([
             dbc.Col(html.H2("Smart-Аналитика: Бизнес-анализ 2026", 
                     style={'color': COLORS['primary'], 'fontWeight': '800', 'paddingTop': '40px'}), width=12)
         ], className="mb-5 text-center"),
 
-        # МЕТРИКИ
+        # Метрики
         dbc.Row([
             dbc.Col(dbc.Card([
                 html.H6("Вакансий в выборке", style={'color': '#64748B'}),
@@ -100,7 +80,7 @@ app.layout = html.Div([
                 html.H3(id='market-avg', style={'color': COLORS['secondary'], 'fontWeight': '700'})
             ], style=CARD_STYLE), width=12, lg=3, md=6),
             dbc.Col(dbc.Card([
-                html.H6("Макс. ЗП", style={'color': '#64748B'}),
+                html.H6("Макс. ЗП", style={'color': '#10B981'}),
                 html.H3(id='market-max', style={'color': '#10B981', 'fontWeight': '700'})
             ], style=CARD_STYLE), width=12, lg=3, md=6),
             dbc.Col(dbc.Card([
@@ -109,7 +89,7 @@ app.layout = html.Div([
             ], style=CARD_STYLE), width=12, lg=3, md=6),
         ], className="g-4 mb-4"),
 
-        # ФИЛЬТРЫ
+        # Фильтры
         dbc.Row([
             dbc.Col(dbc.Card([
                 dbc.Row([
@@ -117,7 +97,7 @@ app.layout = html.Div([
                         html.Label("🌍 Города", style={'fontWeight': '600'}),
                         dcc.Dropdown(
                             id='reg-f', 
-                            options=[{'label': city, 'value': city} for city in sorted(df['city'].dropna().unique())], 
+                            options=[{'label': city, 'value': city} for city in sorted(df['city'].dropna().unique())] if not df.empty else [], 
                             multi=True, placeholder="Все города..."
                         )
                     ], width=12, lg=4),
@@ -126,27 +106,22 @@ app.layout = html.Div([
                         dcc.Checklist(
                             id='lvl-f', 
                             options=[{'label': ' Jr', 'value': 'Junior'}, {'label': ' Mid', 'value': 'Middle'}, {'label': ' Sr', 'value': 'Senior'}], 
-                            value=['Junior', 'Middle', 'Senior'], 
-                            inline=True, className="mt-2"
+                            value=['Junior', 'Middle', 'Senior'], inline=True, className="mt-2"
                         )
                     ], width=12, lg=3),
                     dbc.Col([
                         html.Label(f"💰 Зарплата (до {MAX_SALARY_DATA:,} ₽)", style={'fontWeight': '600'}),
                         dcc.RangeSlider(
-                            id='salary-f',
-                            min=0,
-                            max=MAX_SALARY_DATA,
-                            step=10000,
+                            id='salary-f', min=0, max=MAX_SALARY_DATA, step=10000,
                             marks={0: '0', MAX_SALARY_DATA: f'{MAX_SALARY_DATA//1000}k'},
-                            value=[0, MAX_SALARY_DATA],
-                            className="mt-2"
+                            value=[0, MAX_SALARY_DATA]
                         )
                     ], width=12, lg=5),
                 ])
             ], style=CARD_STYLE), width=12),
         ], className="mb-4"),
 
-        # ГРАФИКИ
+        # Графики
         dbc.Row([
             dbc.Col(html.Div([dcc.Graph(id='gauge-sal')], style=CARD_STYLE), width=12, lg=4),
             dbc.Col(html.Div([dcc.Graph(id='top-companies')], style=CARD_STYLE), width=12, lg=4),
@@ -158,7 +133,7 @@ app.layout = html.Div([
             dbc.Col(html.Div([dcc.Graph(id='region-dist')], style=CARD_STYLE), width=12, lg=6),
         ], className="g-4 mb-4"),
 
-        # ТАБЛИЦА
+        # Таблица
         dbc.Row([
             dbc.Col(html.Div([
                 html.H4("🔍 Реестр вакансий", className="mb-4", style={'fontWeight': '700', 'color': COLORS['primary']}),
@@ -171,12 +146,10 @@ app.layout = html.Div([
                         {"name": "Зарплата", "id": "sal_str"},
                         {"name": "URL", "id": "link", "presentation": "markdown"}
                     ],
-                    style_table={'borderRadius': '10px', 'overflow': 'hidden'},
+                    style_table={'borderRadius': '10px', 'overflowX': 'auto'},
                     style_cell={'textAlign': 'left', 'padding': '15px', 'fontSize': '14px'},
                     style_header={'backgroundColor': '#F8FAFC', 'fontWeight': 'bold', 'color': COLORS['primary']},
-                    page_size=12,
-                    sort_action="native",
-                    filter_action="native",
+                    page_size=12, filter_action="native", sort_action="native",
                 )
             ], style=CARD_STYLE), width=12),
         ], className="mb-5")
@@ -192,18 +165,13 @@ app.layout = html.Div([
     [Input('reg-f', 'value'), Input('lvl-f', 'value'), Input('salary-f', 'value')]
 )
 def update_dashboard(selected_cities, lvls, sal_range):
-    # 1. Фильтр по грейду
+    if df.empty:
+        empty_fig = go.Figure().add_annotation(text="Нет данных", showarrow=False)
+        return "0", "0 ₽", "0 ₽", "---", empty_fig, empty_fig, empty_fig, empty_fig, empty_fig, []
+
+    # Фильтрация
     dff = df[df['level'].isin(lvls)].copy()
-    
-    # 2. Фильтр по зарплате
-    # Оставляем только те, что в диапазоне ИЛИ те, где ЗП не указана (если слайдер в макс. положении)
-    is_full_range = (sal_range[0] == 0 and sal_range[1] == MAX_SALARY_DATA)
-    if is_full_range:
-        pass # Не фильтруем, чтобы видеть все данные включая "По договоренности"
-    else:
-        dff = dff[(dff['salary_avg'] >= sal_range[0]) & (dff['salary_avg'] <= sal_range[1])]
-    
-    # 3. Фильтр по городам
+    dff = dff[(dff['salary_avg'] >= sal_range[0]) & (dff['salary_avg'] <= sal_range[1])]
     if selected_cities:
         dff = dff[dff['city'].isin(selected_cities)]
     
@@ -214,56 +182,55 @@ def update_dashboard(selected_cities, lvls, sal_range):
     # Метрики
     total_vac = str(len(dff))
     avg_sal = dff['salary_avg'].mean()
-    avg_display = f"{int(avg_sal):,} ₽".replace(",", " ") if pd.notna(avg_sal) else "---"
     max_sal = dff['salary_avg'].max()
-    max_display = f"{int(max_sal):,} ₽".replace(",", " ") if pd.notna(max_sal) else "---"
 
     # Золотой стек
-    threshold = dff['salary_avg'].quantile(0.85)
+    threshold = dff['salary_avg'].quantile(0.8) if len(dff) > 5 else 0
     premium_jobs = dff[dff['salary_avg'] >= threshold]
-    premium_skills = [s for sublist in premium_jobs['key_skills_list'] for s in sublist]
+    premium_skills = [s for sub in premium_jobs['key_skills_list'] for s in sub]
     golden_stack_text = " + ".join(pd.Series(premium_skills).value_counts().head(3).index.tolist()) if premium_skills else "SQL + BPMN"
 
-    # Графики
-    fig_g = go.Figure(go.Indicator(mode="gauge+number", value=avg_sal or 0,
-                                   number={'suffix': " ₽", 'valueformat': ',.0f', 'font': {'size': 35}},
+    # Спидометр
+    fig_g = go.Figure(go.Indicator(mode="gauge+number", value=avg_sal,
+                                   number={'suffix': " ₽", 'valueformat': ',.0f'},
                                    gauge={'bar': {'color': COLORS['secondary']}, 'axis': {'range': [0, MAX_SALARY_DATA]}}))
-    fig_g.update_layout(height=300, margin=dict(l=30, r=30, t=50, b=20), title="Средняя зарплата")
+    fig_g.update_layout(height=280, margin=dict(t=50, b=20), title="Средняя зарплата")
 
+    # Топ компаний (ИСПОЛЬЗУЕМ ЯВНЫЕ ИМЕНА СТОЛБЦОВ)
     top_c = dff['company'].value_counts().head(10).reset_index()
-    top_c.columns = ['Компания', 'Вакансий']
-    fig_c = px.bar(top_c, y='Компания', x='Вакансий', orientation='h', color_discrete_sequence=[COLORS['primary']])
-    fig_c.update_layout(height=300, margin=PLOT_MARGINS, yaxis={'categoryorder':'total ascending'}, title="Топ работодателей")
+    top_c.columns = ['Название', 'Количество']
+    fig_c = px.bar(top_c, y='Название', x='Количество', orientation='h', color_discrete_sequence=[COLORS['primary']])
+    fig_c.update_layout(height=300, margin=PLOT_MARGINS, title="Топ работодателей", yaxis={'categoryorder':'total ascending'})
 
-    fig_f = go.Figure(go.Scatter(x=['2024', '2025', '2026'], y=[avg_sal*0.9, avg_sal, avg_sal*1.15] if pd.notna(avg_sal) else [0,0,0], 
+    # Прогноз
+    fig_f = go.Figure(go.Scatter(x=['2024', '2025', '2026'], y=[avg_sal*0.92, avg_sal, avg_sal*1.15], 
                                  line=dict(color=COLORS['secondary'], width=4), mode='lines+markers'))
-    fig_f.update_layout(title="Тренд ЗП к 2026", height=300, margin=PLOT_MARGINS)
+    fig_f.update_layout(title="Тренд ЗП к 2026", height=280, margin=PLOT_MARGINS)
 
-    skills_flat = [s for sublist in dff['key_skills_list'] for s in sublist]
-    if skills_flat:
-        top_s_data = pd.Series(skills_flat).value_counts().head(12).reset_index()
-        top_s_data.columns = ['Навык', 'Частота']
-        fig_s = px.bar(top_s_data, x='Частота', y='Навык', orientation='h', color_discrete_sequence=[COLORS['secondary']])
+    # Навыки (ИСПОЛЬЗУЕМ ЯВНЫЕ ИМЕНА СТОЛБЦОВ)
+    sk_flat = [s for sub in dff['key_skills_list'] for s in sub]
+    if sk_flat:
+        top_s = pd.Series(sk_flat).value_counts().head(12).reset_index()
+        top_s.columns = ['Навык', 'Частота']
+        fig_s = px.bar(top_s, x='Частота', y='Навык', orientation='h', color_discrete_sequence=[COLORS['secondary']])
+        fig_s.update_layout(yaxis={'categoryorder':'total ascending'}, title="Востребованные навыки", height=400, margin=PLOT_MARGINS)
     else:
         fig_s = go.Figure()
-    fig_s.update_layout(title="Востребованные навыки", height=400, margin=PLOT_MARGINS, yaxis={'categoryorder':'total ascending'})
 
-    top_cities_dist = dff['city'].value_counts().head(10)
-    fig_r = px.pie(values=top_cities_dist.values, names=top_cities_dist.index, title="Топ-10 локаций", hole=.4)
-    fig_r.update_layout(height=400, margin=PLOT_MARGINS)
+    # Регионы
+    fig_r = px.pie(values=dff['city'].value_counts().head(10).values, names=dff['city'].value_counts().head(10).index, hole=.4)
+    fig_r.update_layout(title="Локации", height=400, margin=PLOT_MARGINS)
 
-    # Данные таблицы
-    table_data = []
-    for _, row in dff.iterrows():
-        table_data.append({
-            "name": row['name'],
-            "company": row['company'],
-            "city": row['city'],
-            "sal_str": f"{int(row['salary_avg']):,} ₽".replace(",", " ") if pd.notna(row['salary_avg']) else "По договоренности",
-            "link": f"[🔗 Открыть]({row['alternate_url']})" if row['alternate_url'] else "---"
+    # Таблица
+    t_data = []
+    for _, row in dff.tail(100).iterrows():
+        t_data.append({
+            "name": row['name'], "company": row['company'], "city": row['city'],
+            "sal_str": f"{int(row['salary_avg']):,} ₽".replace(",", " ") if pd.notna(row['salary_avg']) else "Договорная",
+            "link": f"[🔗 Открыть]({row['alternate_url']})"
         })
 
-    return total_vac, avg_display, max_display, golden_stack_text, fig_g, fig_c, fig_f, fig_s, fig_r, table_data
+    return total_vac, f"{int(avg_sal):,} ₽", f"{int(max_sal):,} ₽", golden_stack_text, fig_g, fig_c, fig_f, fig_s, fig_r, t_data
 
 if __name__ == '__main__':
     app.run(debug=True)
